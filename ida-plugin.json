@@ -1,0 +1,21 @@
+{
+  "IDAMetadataDescriptorVersion": 1,
+  "plugin": {
+    "name": "tensorlens",
+    "entryPoint": "tensorlens",
+    "version": "0.1.0",
+    "idaVersions": ">=9.5",
+    "platforms": ["windows-x86_64", "linux-x86_64", "macos-x86_64", "macos-aarch64"],
+    "description": "Finds TFLite, ONNX, ncnn and ExecuTorch models embedded in binaries (also inside gzip and tar), shows their graphs in IDA, and recovers the TFLite runtime that runs them: names and types every kernel's Init/Prepare/Eval and links each graph node to its code.",
+    "license": "MIT",
+    "logoPath": "docs/logo.png",
+    "categories": ["file-parsers-and-loaders", "ui-ux-and-visualization", "vulnerability-research-and-exploit-development"],
+    "keywords": ["machine learning", "tflite", "tensorflow lite", "onnx", "ncnn", "executorch", "model extraction", "android", "neural network", "kernel recovery"],
+    "urls": {
+      "repository": "https://github.com/AbrahamPaulJ/tensorlens"
+    },
+    "authors": [
+      {"name": "Abraham Paul Jaison", "email": "108326901+AbrahamPaulJ@users.noreply.github.com"}
+    ]
+  }
+}
