@@ -554,6 +554,14 @@ std::string kernel_label(const Kernel &k) {
 // file and a comment listing every operator that uses them.
 using Users = std::map<ea_t, std::vector<const Kernel *>>;
 
+Users kernel_users(const State &st) {
+  Users users;
+  for (const Kernel &k : st.kernels)
+    for (ea_t f : {k.init, k.free, k.prepare, k.invoke})
+      if (f != BADADDR) users[f].push_back(&k);
+  return users;
+}
+
 void name_function(State &st, ea_t ea, const char *role, const Kernel &k, const Users &users, std::set<ea_t> &done) {
   if (ea == BADADDR || !done.insert(ea).second) return;
   if (!is_code(get_flags(ea))) create_insn(ea);
@@ -595,7 +603,7 @@ void name_function(State &st, ea_t ea, const char *role, const Kernel &k, const 
   }
   if (nuses) cmt += "\nruns " + std::to_string(nuses) + " node(s) of the models in this binary:" + where;
   qstring old;
-  if (get_func_cmt_ea(&old, ea, false) <= 0 || strstr(old.c_str(), "TensorLens") == nullptr)
+  if (get_func_cmt_ea(&old, ea, false) <= 0 || strncmp(old.c_str(), "TensorLens", 10) == 0)
     set_func_cmt_ea(ea, cmt.c_str(), false);
 }
 
@@ -653,10 +661,7 @@ void recover_runtime(State &st) {
 
   if (!st.kernels.empty() || st.runtime.tflite) ensure_tflite_types();
   replace_wait_box("TensorLens: naming %zu kernels", st.kernels.size());
-  Users users;
-  for (const Kernel &k : st.kernels)
-    for (ea_t f : {k.init, k.free, k.prepare, k.invoke})
-      if (f != BADADDR) users[f].push_back(&k);
+  Users users = kernel_users(st);
   std::set<ea_t> done;
   for (Kernel &k : st.kernels) name_and_type(st, k, users, done);
   hide_wait_box();
@@ -675,6 +680,17 @@ void recover_runtime(State &st) {
     for (auto &[f, files] : st.runtime.func_files)
       if (files.begin()->rfind("onnxruntime/", 0) == 0) n++;
     msg("TensorLens: ONNX Runtime present; %zu functions reference ORT kernel sources\n", n);
+  }
+}
+
+void annotate_kernels(State &st) {
+  Users users = kernel_users(st);
+  std::set<ea_t> done;
+  for (Kernel &k : st.kernels) {
+    name_function(st, k.init, "Init", k, users, done);
+    name_function(st, k.free, "Free", k, users, done);
+    name_function(st, k.prepare, "Prepare", k, users, done);
+    name_function(st, k.invoke, "Eval", k, users, done);
   }
 }
 

@@ -50,7 +50,7 @@ struct ModelsChooser : public chooser_t {
   void idaapi get_row(qstrvec_t *cols, int *, chooser_item_attrs_t *attrs, size_t n) const override {
     const FoundModel &m = st.models[n];
     const Model &mod = m.hit.model;
-    (*cols)[0] = m.file_only ? ("file+" + hexea(m.file_offset)).c_str() : hexea(m.ea).c_str();
+    (*cols)[0] = m.external ? "added" : m.file_only ? ("file+" + hexea(m.file_offset)).c_str() : hexea(m.ea).c_str();
     (*cols)[1] = format_name(mod.format);
     (*cols)[2].sprnt("%zu", mod.node_count());
     auto h = mod.op_histogram();

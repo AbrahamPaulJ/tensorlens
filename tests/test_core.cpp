@@ -213,13 +213,52 @@ static void test_report() {
   CHECK(h.find("Custom operators") != std::string::npos);
 }
 
+// Regression: weight buffers over 1M bytes were rejected by the vector-length cap, which hid every
+// real model with a large layer (seeneva's YOLO, EfficientNet, MediaPipe face landmarker).
+// Hand-built flatbuffer: Model{version 3, subgraphs [{}], buffers [{}, {data: 3 MB}]}.
+static void test_large_buffer() {
+  const uint32_t n = 3u << 20;
+  std::vector<uint8_t> b(88 + 4 + n, 0);
+  auto u16 = [&](size_t o, uint16_t v) { std::memcpy(&b[o], &v, 2); };
+  auto u32 = [&](size_t o, uint32_t v) { std::memcpy(&b[o], &v, 4); };
+  u32(0, 24);                  // root -> Model table
+  std::memcpy(&b[4], "TFL3", 4);
+  // Model vtable @8: size 16, table 16 bytes, fields 0 (version) +4, 2 (subgraphs) +8, 4 (buffers) +12
+  u16(8, 16); u16(10, 16); u16(12, 4); u16(14, 0); u16(16, 8); u16(18, 0); u16(20, 12); u16(22, 0);
+  u32(24, 16);                 // Model table @24, vtable at 24-16
+  u32(28, 3);                  // version
+  u32(32, 40 - 32);            // subgraphs -> @40
+  u32(36, 48 - 36);            // buffers -> @48
+  u32(40, 1); u32(44, 64 - 44);                        // [subgraph @64]
+  u32(48, 2); u32(52, 68 - 52); u32(56, 80 - 56);      // [buffer @68, buffer @80]
+  u16(60, 4); u16(62, 4);                              // empty vtable @60
+  u32(64, 4);                  // Subgraph {} (vtable @60)
+  u32(68, 8);                  // Buffer {} (vtable @60)
+  u16(72, 6); u16(74, 8); u16(76, 4);                  // Buffer vtable @72: data at +4
+  u32(80, 8);                  // Buffer table @80 (vtable @72)
+  u32(84, 88 - 84);            // data -> @88
+  u32(88, n);
+  for (uint32_t i = 0; i < n; i++) b[92 + i] = uint8_t(i * 7 + 1);
+  auto r = tl::parse_tflite(b.data(), b.size());
+  if (!r.ok) std::printf("  large buffer: %s\n", r.error.c_str());
+  CHECK(r.ok);
+  CHECK(r.ok && r.model.size >= 92 + n);
+  // And the scanner finds it embedded in other bytes.
+  std::vector<uint8_t> host(4096, 0x90);
+  host.insert(host.end(), b.begin(), b.end());
+  host.resize(host.size() + 4096, 0xCC);
+  auto hits = tl::scan(host.data(), host.size());
+  CHECK(hits.size() == 1 && hits[0].offset == 4096 && hits[0].model.size >= 92 + n);
+}
+
 int main(int argc, char **argv) {
   std::setvbuf(stdout, nullptr, _IONBF, 0);
   g_data = argc > 1 ? argv[1] : "tests/data";
   struct T { const char *name; void (*fn)(); } tests[] = {
       {"tflite_fixtures", test_tflite_fixtures}, {"onnx_fixtures", test_onnx_fixtures}, {"ncnn", test_ncnn},
       {"embedding", test_embedding},             {"false_positives", test_false_positives},
-      {"fuzz", test_fuzz},                       {"gzip_tar", test_gzip_tar},                       {"report", test_report}};
+      {"fuzz", test_fuzz},                       {"gzip_tar", test_gzip_tar},                       {"report", test_report},
+      {"large_buffer", test_large_buffer}};
   for (auto &t : tests) {
     auto t0 = std::chrono::steady_clock::now();
     t.fn();

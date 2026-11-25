@@ -78,7 +78,9 @@ struct Table {
     uint64_t v = deref(idx);
     if (!v) { count = 0; first = 0; return false; }
     count = fb->u32(v);
-    if (count > kMaxItems) throw ParseError{"vector too long"};
+    // Byte vectors are weight buffers and can be any size (touch() checks them against the data);
+    // the cap guards loops over tables and scalars.
+    if (elem > 1 && count > kMaxItems) throw ParseError{"vector too long"};
     first = v + 4;
     fb->touch(first, uint64_t(count) * elem);
     return true;

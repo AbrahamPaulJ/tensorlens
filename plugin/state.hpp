@@ -21,6 +21,7 @@ struct FoundModel {
   ea_t ea = BADADDR;              // start of the model (or of the gzip stream holding it)
   uint64_t file_offset = 0;       // offset in the input file when found there
   bool file_only = false;         // bytes exist in the input file but are not loaded
+  bool external = false;          // added from another file (the APK or assets beside the library)
   std::string segment;
   Hit hit;                        // model + compressed-stream info
   std::vector<uint8_t> bytes;     // standalone copy of the model's bytes (for export)
@@ -73,9 +74,11 @@ struct State {
 // idb_models.cpp
 void scan_database(State &st, bool include_input_file);
 void annotate_models(State &st);
+int add_external_models(State &st, const std::string &path);  // -1 if unreadable
 
 // runtime.cpp
 void recover_runtime(State &st);
+void annotate_kernels(State &st);  // refresh kernel comments after models change
 
 // typelib.cpp
 bool ensure_tflite_types();

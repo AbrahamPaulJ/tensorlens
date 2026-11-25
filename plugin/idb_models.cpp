@@ -1,8 +1,10 @@
 // Find models in the loaded segments (and optionally in the parts of the input file that are not
 // loaded), then label them and record which code references them.
+#include <algorithm>
 #include <cstdio>
 #include <fstream>
 
+#include "container.hpp"
 #include "state.hpp"
 
 #include <bytes.hpp>
@@ -78,7 +80,9 @@ bool read_file(const char *path, std::vector<uint8_t> &out) {
 }  // namespace
 
 void scan_database(State &st, bool include_input_file) {
-  st.models.clear();
+  // Keep models added from other files; rescan the database's own.
+  st.models.erase(std::remove_if(st.models.begin(), st.models.end(), [](const FoundModel &m) { return !m.external; }),
+                  st.models.end());
   show_wait_box("TensorLens: scanning for ML models...");
   std::set<ea_t> found_eas;
   for (ea_t s = get_first_segment_ea(); s != BADADDR; s = get_next_segment_ea(s)) {
@@ -141,6 +145,33 @@ void scan_database(State &st, bool include_input_file) {
   }
   st.scanned = true;
   msg("TensorLens: %zu model(s) found\n", st.models.size());
+}
+
+int add_external_models(State &st, const std::string &path) {
+  std::vector<uint8_t> buf;
+  if (!read_whole_file(path, buf)) return -1;
+  std::string shown = path;
+  size_t slash = shown.find_last_of("/\\");
+  if (slash != std::string::npos) shown = shown.substr(slash + 1);
+  int added = 0;
+  show_wait_box("TensorLens: scanning %s", shown.c_str());
+  scan_tree(shown, buf, [&](const std::string &where, Hit &h, const uint8_t *base) {
+    FoundModel m;
+    m.segment = where;
+    m.external = true;
+    m.file_only = true;
+    m.file_offset = h.offset;
+    if (h.model.size) {
+      const uint8_t *p = h.bytes(base);
+      m.bytes.assign(p, p + h.model.size);
+    }
+    m.hit = std::move(h);
+    st.models.push_back(std::move(m));
+    added++;
+  });
+  hide_wait_box();
+  msg("TensorLens: %d model(s) added from %s\n", added, path.c_str());
+  return added;
 }
 
 void annotate_models(State &st) {

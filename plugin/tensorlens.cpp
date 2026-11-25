@@ -124,13 +124,13 @@ struct ah_t : public action_handler_t {
   action_state_t idaapi update(action_update_ctx_t *ctx) override;
 };
 
-enum { A_RUN, A_MODELS, A_KERNELS, A_REPORT, A_EXPORT, A_GRAPH, A_COUNT };
+enum { A_RUN, A_MODELS, A_KERNELS, A_REPORT, A_EXPORT, A_GRAPH, A_ADD, A_COUNT };
 
 struct plugin_ctx_t : public plugmod_t, public event_listener_t {
   State st;
   std::string auto_report;  // headless mode: write the report here and exit
   ah_t handlers[A_COUNT] = {{*this, A_RUN},    {*this, A_MODELS}, {*this, A_KERNELS},
-                            {*this, A_REPORT}, {*this, A_EXPORT}, {*this, A_GRAPH}};
+                            {*this, A_REPORT}, {*this, A_EXPORT}, {*this, A_GRAPH}, {*this, A_ADD}};
 
   plugin_ctx_t() {
     static const struct { const char *name, *label, *hotkey, *menu; } acts[A_COUNT] = {
@@ -140,6 +140,7 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
         {"tensorlens:report", "TensorLens: export report (HTML + JSON)...", nullptr, "File/Produce file/"},
         {"tensorlens:export", "Export model file...", nullptr, nullptr},
         {"tensorlens:graph", "Show model graph", nullptr, nullptr},
+        {"tensorlens:add", "TensorLens: add models from a file, APK or AAR...", nullptr, "File/Load file/"},
     };
     for (int i = 0; i < A_COUNT; i++) {
       action_desc_t d = ACTION_DESC_LITERAL_PLUGMOD(acts[i].name, acts[i].label, &handlers[i], this, acts[i].hotkey,
@@ -153,7 +154,7 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
   }
   ~plugin_ctx_t() override {
     for (const char *n : {"tensorlens:run", "tensorlens:models", "tensorlens:kernels", "tensorlens:report",
-                          "tensorlens:export", "tensorlens:graph"})
+                          "tensorlens:export", "tensorlens:graph", "tensorlens:add"})
       unregister_action(n);
   }
 
@@ -203,9 +204,27 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
     return 0;
   }
 
+  // Models shipped beside the library (the APK's assets) are where its kernels get used.
+  void add_models(const std::string &path) {
+    if (add_external_models(st, path) < 0) {
+      warning("TensorLens: cannot read %s", path.c_str());
+      return;
+    }
+    if (st.recovered) annotate_kernels(st);
+  }
+
   void run_headless() {
     auto_wait();
     analyse(false);
+    if (const char *extra = getenv("TENSORLENS_MODELS")) {  // ';'-separated files to add
+      std::string all = extra;
+      for (size_t a = 0; a < all.size();) {
+        size_t b = all.find(';', a);
+        if (b == std::string::npos) b = all.size();
+        if (b > a) add_models(all.substr(a, b - a));
+        a = b + 1;
+      }
+    }
     Report r = st.make_report();
     std::string base = auto_report.substr(0, auto_report.rfind('.'));
     bool ok = write_text(auto_report, to_json(r, false)) && write_text(base + ".html", to_html(r));
@@ -228,6 +247,15 @@ int idaapi ah_t::activate(action_activation_ctx_t *ctx) {
     case A_MODELS: plg.analyse(false); show_models(st); break;
     case A_KERNELS: plg.analyse(false); show_kernels(st); break;
     case A_REPORT: plg.analyse(false); plg.export_report(); break;
+    case A_ADD: {
+      plg.analyse(false);
+      char *p = ask_file(false, "*.apk;*.aab;*.aar;*.zip;*.tflite;*.onnx;*.param;*.pte;*.task;*.*",
+                         "Model file, or an APK/AAR/zip holding models");
+      if (p == nullptr) break;
+      plg.add_models(p);
+      show_models(st);
+      break;
+    }
     case A_EXPORT:
     case A_GRAPH: {
       if (ctx->chooser_selection.empty()) break;
