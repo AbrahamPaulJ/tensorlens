@@ -53,7 +53,7 @@ struct RuntimeInfo {
   ea_t add_builtin = BADADDR;           // the AddBuiltin callee
   int named_functions = 0;
   int typed_functions = 0;
-  int resolver_calls = 0, resolver_decoded = 0;
+  int resolver_calls = 0, resolver_decoded = 0, resolvers_named = 0;
   int resolver_agree = 0, resolver_disagree = 0;  // resolver decoding checked against symbols
 };
 

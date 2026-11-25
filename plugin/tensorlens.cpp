@@ -99,8 +99,12 @@ Report State::make_report() const {
     r.notes.push_back("Op resolver " + ea_name(runtime.resolver) + " registers kernels through " +
                       ea_name(runtime.add_builtin) + ".");
   for (const std::string &d : runtime.delegates) r.notes.push_back("Delegate / execution provider: " + d);
-  r.notes.push_back(std::to_string(runtime.named_functions) + " functions named, " +
-                    std::to_string(runtime.typed_functions) + " kernels given TFLite types.");
+  if (!kernels.empty())
+    r.notes.push_back(std::to_string(runtime.named_functions) + " functions named, " +
+                      std::to_string(runtime.typed_functions) + " kernels given TFLite types.");
+  if (runtime.resolver_agree + runtime.resolver_disagree)
+    r.notes.push_back("Op resolver decoding checked against symbols: " + std::to_string(runtime.resolver_agree) +
+                      " agree, " + std::to_string(runtime.resolver_disagree) + " disagree.");
   return r;
 }
 

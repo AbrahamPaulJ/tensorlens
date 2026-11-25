@@ -9,6 +9,7 @@
 #include <graph.hpp>
 #include <kernwin.hpp>
 #include <lines.hpp>
+#include <moves.hpp>
 #include <name.hpp>
 #include <netnode.hpp>
 
@@ -50,25 +51,25 @@ struct ModelsChooser : public chooser_t {
   void idaapi get_row(qstrvec_t *cols, int *, chooser_item_attrs_t *attrs, size_t n) const override {
     const FoundModel &m = st.models[n];
     const Model &mod = m.hit.model;
-    (*cols)[0] = m.external ? "added" : m.file_only ? ("file+" + hexea(m.file_offset)).c_str() : hexea(m.ea).c_str();
+    (*cols)[0] = m.external ? "file" : m.file_only ? ("file+" + hexea(m.file_offset)).c_str() : hexea(m.ea).c_str();
     (*cols)[1] = format_name(mod.format);
     (*cols)[2].sprnt("%zu", mod.node_count());
-    auto h = mod.op_histogram();
-    std::string top;
-    for (size_t i = 0; i < h.size() && i < 3; i++) top += (i ? ", " : "") + h[i].first + " x" + std::to_string(h[i].second);
-    (*cols)[3] = top.c_str();
-    (*cols)[4] = format_bytes(mod.weight_bytes()).c_str();
-    if (!mod.graphs.empty()) {
-      (*cols)[5] = io_text(mod.graphs[0], mod.graphs[0].inputs).c_str();
-      (*cols)[6] = io_text(mod.graphs[0], mod.graphs[0].outputs).c_str();
-    }
     std::string custom;
     for (const std::string &c : mod.custom_ops()) custom += (custom.empty() ? "" : ", ") + c;
-    (*cols)[7] = custom.c_str();
+    (*cols)[3] = custom.c_str();
     std::string where = m.segment;
     if (m.hit.compressed) where += ", " + m.hit.container;
     if (!m.referenced_by.empty()) where += ", used by " + fname(m.referenced_by[0]);
-    (*cols)[8] = where.c_str();
+    (*cols)[4] = where.c_str();
+    (*cols)[5] = format_bytes(mod.weight_bytes()).c_str();
+    if (!mod.graphs.empty()) {
+      (*cols)[6] = io_text(mod.graphs[0], mod.graphs[0].inputs).c_str();
+      (*cols)[7] = io_text(mod.graphs[0], mod.graphs[0].outputs).c_str();
+    }
+    auto h = mod.op_histogram();
+    std::string top;
+    for (size_t i = 0; i < h.size() && i < 3; i++) top += (i ? ", " : "") + h[i].first + " x" + std::to_string(h[i].second);
+    (*cols)[8] = top.c_str();
     if (!custom.empty()) attrs->color = 0xC8C8FF;  // custom ops: native code worth a look
   }
   cbret_t idaapi enter(size_t n) override {
@@ -76,9 +77,9 @@ struct ModelsChooser : public chooser_t {
     return cbret_t();
   }
 };
-const int ModelsChooser::widths_[] = {CHCOL_HEX | 12, 8, 5, 34, 9, 22, 22, 22, 50};
-const char *const ModelsChooser::header_[] = {"Address", "Format", "Ops", "Most used ops", "Weights",
-                                              "Inputs", "Outputs", "Custom ops", "Where"};
+const int ModelsChooser::widths_[] = {CHCOL_HEX | 10, 6, 5, 24, 44, 8, 18, 18, 36};
+const char *const ModelsChooser::header_[] = {"Address", "Format", "Ops", "Custom ops", "Where",
+                                              "Weights", "Inputs", "Outputs", "Most used ops"};
 
 // --- kernels chooser ------------------------------------------------------------------------
 struct KernelsChooser : public chooser_t {
@@ -91,31 +92,43 @@ struct KernelsChooser : public chooser_t {
     *len = strlen(title);
     return title;
   }
-  size_t idaapi get_count() const override { return st.kernels.size(); }
+  // Kernels that run the models found come first, most used first; the rest alphabetically.
+  mutable std::vector<size_t> order;
+  size_t idaapi get_count() const override {
+    std::vector<size_t> uses(st.kernels.size());
+    order.resize(st.kernels.size());
+    for (size_t i = 0; i < order.size(); i++) {
+      order[i] = i;
+      uses[i] = st.kernels[i].variant ? 0 : st.nodes_using(st.kernels[i].op).size();
+    }
+    std::stable_sort(order.begin(), order.end(), [&](size_t a, size_t b) { return uses[a] > uses[b]; });
+    return order.size();
+  }
   void idaapi get_row(qstrvec_t *cols, int *, chooser_item_attrs_t *attrs, size_t n) const override {
-    const Kernel &k = st.kernels[n];
+    if (n >= order.size()) return;
+    const Kernel &k = st.kernels[order[n]];
     std::string op = k.op.empty() ? "?" : k.op;
     if (k.variant) op += " (variant " + std::to_string(k.variant + 1) + ")";
-    (*cols)[0] = op.c_str();
-    (*cols)[1] = fname(k.invoke).c_str();
-    (*cols)[2] = fname(k.prepare).c_str();
-    (*cols)[3] = hexea(k.table).c_str();
-    (*cols)[4] = k.source_file.c_str();
     auto uses = st.nodes_using(k.op);
-    (*cols)[5].sprnt("%zu", uses.size());
-    (*cols)[6] = k.custom ? "custom" : (k.builtin_code >= 0 ? std::to_string(k.builtin_code).c_str() : "");
-    (*cols)[7] = k.evidence.c_str();
+    (*cols)[0] = op.c_str();
+    (*cols)[1].sprnt("%zu", uses.size());
+    (*cols)[2] = fname(k.invoke).c_str();
+    (*cols)[3] = fname(k.prepare).c_str();
+    (*cols)[4] = k.evidence.c_str();
+    (*cols)[5] = k.source_file.c_str();
+    (*cols)[6] = hexea(k.table).c_str();
+    (*cols)[7] = k.custom ? "custom" : (k.builtin_code >= 0 ? std::to_string(k.builtin_code).c_str() : "");
     if (k.custom) attrs->color = 0xC8C8FF;
     else if (!uses.empty() && k.variant == 0) attrs->color = 0xC8FFC8;  // runs in a model found here
   }
   cbret_t idaapi enter(size_t n) override {
-    if (n < st.kernels.size()) jumpto(st.kernels[n].invoke);
+    if (n < order.size()) jumpto(st.kernels[order[n]].invoke);
     return cbret_t();
   }
 };
-const int KernelsChooser::widths_[] = {24, 30, 30, CHCOL_HEX | 12, 22, 6, 7, 60};
-const char *const KernelsChooser::header_[] = {"Operator", "Eval", "Prepare", "Registration", "Source file",
-                                               "Uses", "Code", "Identified by"};
+const int KernelsChooser::widths_[] = {18, 5, 24, 24, 46, 14, CHCOL_HEX | 10, 5};
+const char *const KernelsChooser::header_[] = {"Operator", "Nodes", "Eval", "Prepare", "Identified by",
+                                               "Source file", "Registration", "Code"};
 
 // --- graph viewer ---------------------------------------------------------------------------
 struct GraphData {
@@ -335,7 +348,22 @@ void show_graph(State &st, int model_index) {
   d->gv = create_graph_viewer(title.c_str(), id, graph_cb, d.get(), 0);
   if (d->gv == nullptr) return;
   display_widget(d->gv, WOPN_DP_TAB);
-  viewer_fit_window(d->gv);
+  if (d->text.size() <= 25) {
+    viewer_fit_window(d->gv);
+  } else {
+    // Big graphs are unreadable when fitted: open at 100% on the first custom op (native code in
+    // the model's data path, the node worth a look), or else on the model's input.
+    const Graph &g = fm.hit.model.graphs[sg];
+    int focus = -1;
+    for (size_t i = 0; i < d->node_op.size() && focus < 0; i++)
+      if (d->node_op[i] >= 0 && g.nodes[d->node_op[i]].custom) focus = int(i);
+    for (size_t i = 0; i < d->node_op.size() && focus < 0; i++)
+      if (d->node_op[i] < 0) focus = int(i);
+    graph_location_info_t gli;
+    gli.zoom = 1.0;
+    viewer_set_gli(d->gv, &gli, 0);
+    viewer_center_on(d->gv, focus < 0 ? 0 : focus);
+  }
   g_graphs.push_back(std::move(d));
 }
 

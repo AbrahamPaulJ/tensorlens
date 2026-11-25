@@ -515,6 +515,23 @@ void from_resolver(Ctx &c) {
       c.st.runtime.resolver = caller;
       c.st.runtime.add_builtin = *used_callees.begin();
     }
+    // Name the resolver and its registration callees (only over dummy names).
+    int nres = c.st.runtime.resolvers_named++;
+    rename_if_dummy(caller, nres ? "tflite_OpResolver_ctor_" + std::to_string(nres + 1) : "tflite_OpResolver_ctor");
+    set_func_cmt_ea(caller,
+                    ("TensorLens: TFLite op resolver constructor, registers " + std::to_string(dec.size()) +
+                     " kernels (BuiltinOpResolver or an app's own MutableOpResolver)").c_str(),
+                    false);
+    int nb = 0, nc = 0;
+    for (ea_t cal : used_callees) {
+      bool custom = true;
+      for (const Decoded &d : dec)
+        if (call_target(d.site) == cal && d.code >= 0) custom = false;
+      ea_t real = resolve_thunk(c, cal);
+      int &n = custom ? nc : nb;
+      std::string nm = custom ? "tflite_MutableOpResolver_AddCustom" : "tflite_MutableOpResolver_AddBuiltin";
+      rename_if_dummy(real, n++ ? nm + "_" + std::to_string(n) : nm);
+    }
     c.st.runtime.resolver_calls += total;
     c.st.runtime.resolver_decoded += int(dec.size());
     msg("TensorLens: op resolver at %a: %d calls to AddBuiltin/AddCustom, %zu decoded\n", caller, total, dec.size());
@@ -576,7 +593,9 @@ void name_function(State &st, ea_t ea, const char *role, const Kernel &k, const 
     }
   std::string name;
   if (ops.size() > 1) {
-    std::string stem = files.size() == 1 ? files.begin()->substr(0, files.begin()->find('.')) : *ops.begin();
+    std::string stem = files.size() == 1 ? files.begin()->substr(0, files.begin()->find('.'))
+                       : ops.size() == 2 ? *ops.begin() + "_" + *ops.rbegin()
+                                         : *ops.begin();
     name = "tflite_" + sanitize(stem) + "_" + role + "_shared";
   } else if (!k.op.empty()) {
     name = std::string(k.custom ? "tflite_custom_" : "tflite_") + sanitize(k.op) + "_" + role;
@@ -587,6 +606,27 @@ void name_function(State &st, ea_t ea, const char *role, const Kernel &k, const 
     name = std::string("tflite_kernel_") + role;
   }
   if (rename_if_dummy(ea, name)) st.runtime.named_functions++;
+  // Templated kernels: Prepare/Eval are often a few instructions that set the kernel variant and
+  // tail-jump into the real implementation. Name that target too.
+  if (calc_func_size_ea(ea) <= 48) {
+    ea_t last = BADADDR;
+    for_each_head(ea, [&](ea_t h) { last = h; });
+    qstring mq;
+    if (last != BADADDR && print_insn_mnem(&mq, last)) {
+      std::string mn = lower(mq.c_str());
+      if (mn == "jmp" || mn == "b") {
+        xrefblk_t xb;
+        for (bool ok = xb.first_from(last, XREF_CODE | XREF_NOFLOW); ok; ok = xb.next_from()) {
+          if (!xb.iscode || xb.to == ea || get_func_start(xb.to) != xb.to) continue;
+          if (rename_if_dummy(xb.to, name + "_impl")) {
+            st.runtime.named_functions++;
+            set_func_cmt_ea(xb.to, ("TensorLens: implementation behind " + name + " (tail call)").c_str(), false);
+          }
+          break;
+        }
+      }
+    }
+  }
 
   std::string cmt = std::string("TensorLens: TFLite kernel ") + role + " for ";
   size_t i = 0;

@@ -1,0 +1,188 @@
+<p align="center"><img src="docs/logo.png" width="560" alt="TensorLens"></p>
+
+# TensorLens
+
+**ML models and the runtimes that run them, inside the binary, in IDA.**
+
+On-device machine learning is now in ordinary apps: face and object detection, keyboards, voice,
+document scanners. A reverse engineer who opens one of these libraries meets two things IDA knows
+nothing about:
+
+1. **The model**: a TFLite flatbuffer or ONNX protobuf, embedded in `.rodata`, compressed inside a
+   gzip/tar blob, or shipped in the APK next to the library.
+2. **The runtime**: hundreds of anonymous functions (TFLite's kernels), reached only through function
+   pointer tables, in a library that is usually stripped.
+
+TensorLens handles both, and connects them.
+
+| | |
+|---|---|
+| **Find models** | TFLite, ONNX, ncnn and ExecuTorch, embedded anywhere in the database or the input file, also inside gzip streams and tar archives (Rust apps embed them this way). Each is validated structurally, not just by magic bytes. |
+| **Read models** | Operators, tensors, shapes, data types, quantisation, weights, custom ops, metadata, signatures, and the code that references the model. |
+| **Graph view** | The model graph as an IDA graph. Hover for tensor details; double-click an operator to jump to the kernel that executes it. |
+| **Recover the TFLite runtime** | Names every kernel's `Init`/`Free`/`Prepare`/`Eval` and its `TfLiteRegistration`, in stripped builds, and applies the TFLite C types (`TfLiteContext`, `TfLiteNode`, `TfLiteTensor`, ...) so pseudocode reads as `node->inputs->data[0]`. |
+| **Connect them** | Each kernel's comment lists the model nodes it runs; each graph node links to its kernel; the report lists operators a model needs that the binary does not implement (they run in a delegate, or come from a custom op). |
+| **Report** | HTML and JSON: models, load sites, kernels with evidence, delegates (NNAPI, GPU, XNNPACK, Hexagon), custom ops. |
+| **Command-line scanner** | `tensorlens-scan` finds models in files, APKs, AARs and wheels, without IDA. |
+
+**The model graph**, from the object detector in the Lespas photo app's APK, opened over the app's stripped
+`libtensorflowlite_jni.so`. Every operator shows its output tensor and links to the kernel that runs it; the
+custom op (native code outside the stock runtime) is red.
+
+![Model graph in IDA](docs/img/graph.png)
+
+**The kernels**, recovered from the same stripped library (no symbols, no kernel path strings) by decoding its
+op resolver. Kernels that run the loaded model are green and sorted first.
+
+![TFLite kernels](docs/img/kernels.png)
+
+**What a kernel looks like afterwards**: named, typed, with the evidence and the model nodes it runs.
+
+![A recovered kernel](docs/img/disasm.png)
+
+## Why it matters
+
+- **Security review of AI features.** Which models does this app ship, what can they see, and which native
+  code processes the input? Custom ops (`AddCustom("...")`) are native code in the model's data path and
+  deserve a look; TensorLens lists them and colours them.
+- **Model extraction and integrity.** Find the model, export it to a standalone `.tflite`/`.onnx` for Netron,
+  and see where the app loads it from (code that references it, or a gzip blob that is unpacked first).
+- **Runtime triage.** In a stripped `libtensorflowlite_jni.so` the ~440 kernel functions are anonymous.
+  TensorLens names them from the runtime's own op resolver, so the interesting code (the app's own code,
+  or a patched kernel) stands out from the stock runtime.
+- **Vulnerability research.** TFLite kernels parse attacker-supplied tensors when a model or its input is
+  untrusted. Typed, named kernels make that code readable.
+
+## Results on real binaries
+
+Measured with the headless runner (`tools/ida_suite.ps1`) on IDA Free 9.5, x86_64 builds. Every number
+below comes from a run's `report.json`; nothing is hand-edited.
+
+| Binary | What it is | Kernels found | Resolver calls decoded | Functions named |
+|---|---|---|---|---|
+| `_pywrap_tensorflow_interpreter_wrapper.so` | tflite-runtime 2.14 (with symbols) | 222 | 157 + 147 (two resolvers) | 0 (keeps the symbol names) |
+| `libtensorflowlite_jni.so` | TFLite 2.16.1 AAR (stripped, kernel path strings) | 172 | 168 / 168 | 442 |
+| `libtensorflowlite_jni.so` | whobird (BirdNET) app, **no symbols, no strings** | 172 | 172 / 172 | 437 |
+| `libseeneva.so` | Seeneva comic reader: Rust app, TFLite statically linked | 126 | 122 / 122 | 308 |
+| `libdeep_filter_ladspa.so` | DeepFilterNet: 3 ONNX models in a gzip tar in `.rodata` | models: 3 | | |
+
+**Accuracy check.** On the tflite-runtime build that keeps its `Register_*` symbols, the op resolver decoder
+(which never looks at symbols) agrees with the symbols on **203 of 203** registrations. The same decoder is
+what names the kernels in the stripped builds above.
+
+The scanner has no false positives on 128 MB of random and low-entropy data, and survives truncation and
+mutation fuzzing of every fixture (`tests/`).
+
+## Install
+
+**With hcli** (IDA 9.5 or later):
+
+```
+hcli plugin install tensorlens
+```
+
+**By hand:** download `tensorlens-<version>.zip` from the
+[releases](https://github.com/AbrahamPaulJ/tensorlens/releases) and copy the plugin for your platform
+(`tensorlens.dll`, `tensorlens.so` or `tensorlens.dylib`) into `%APPDATA%\Hex-Rays\IDA Pro\plugins` (Windows)
+or `~/.idapro/plugins` (Linux, macOS).
+
+No Python, no dependencies: the flatbuffer, protobuf and zip readers are built in. Works in every IDA
+edition that loads native plugins, including IDA Free 9.5.
+
+## Usage
+
+| Action | Where |
+|---|---|
+| Analyse everything (find models, recover the runtime, open the windows) | **Edit > Plugins > TensorLens** or `Ctrl+Alt+M` |
+| Models found | **View > Open subviews > TensorLens: models**. `Enter` opens the graph; right-click to export the model |
+| Kernels recovered | **View > Open subviews > TensorLens: TFLite kernels**. `Enter` jumps to `Eval` |
+| Add the models an app ships beside the library | **File > Load file > TensorLens: add models from a file, APK or AAR** |
+| Export the report | **File > Produce file > TensorLens: export report (HTML + JSON)** |
+
+A typical session on an Android app:
+
+1. Open `lib/x86_64/libtensorflowlite_jni.so` (or the app's own library with TFLite linked in) and press
+   `Ctrl+Alt+M`. The kernels window fills with `CONV_2D`, `DEPTHWISE_CONV_2D`, ... and every kernel function
+   is named and typed.
+2. **Add models** and pick the APK. TensorLens reads the models in `assets/` (also inside MediaPipe `.task`
+   bundles), and every kernel comment now says which model nodes it runs.
+3. Open a model's graph, hover a node for its tensors, double-click it to land in its `Eval`.
+
+**Headless** (CI, batch triage):
+
+```
+ida -Otensorlens:report.json  path/to/libfoo.so
+```
+
+writes `report.json` and `report.html` after auto-analysis and closes IDA. Set `TENSORLENS_MODELS` to a
+`;`-separated list of files or APKs to add their models first. (IDA Pro can add `-A` to skip the load dialog.)
+
+## Command-line scanner
+
+```
+tensorlens-scan [--json FILE] [--html FILE] [--extract DIR] [--tensors] [-q] files...
+```
+
+```
+$ tensorlens-scan site.leos.apps.lespas_120.apk
+site.leos.apps.lespas_120.apk!assets/objectdetect.tflite @0x0  TFLite schema v3, 64 ops (CONV_2D x34, DEPTHWISE_CONV_2D x13, RESHAPE x13, ...), 4.0 MB weights  (4.0 MB)
+    custom op: TFLite_Detection_PostProcess
+```
+
+## How it works
+
+**Finding models.** The scanner looks for each format's signature (`TFL3` at offset 4, ONNX's leading
+`ir_version` field, ncnn's `7767517`, ExecuTorch's `ET`) and then parses the whole structure with a
+bounds-checked reader: every flatbuffer offset, vtable and vector, every protobuf field. A candidate counts
+only if it parses completely; its true size is the furthest byte the parser touched. Gzip streams are
+inflated and scanned in turn, and tar member names are kept.
+
+**Recovering the TFLite runtime** combines three independent sources of evidence:
+
+1. **The op resolver** (works on fully stripped builds). `BuiltinOpResolver`'s constructor is a long run of
+   `AddBuiltin(this, BuiltinOperator_X, Register_X(), min, max)`. TensorLens finds it as the function that
+   calls one callee hundreds of times, then walks it once with a small register-constant tracker. The tracker
+   follows `mov reg, imm`, `push imm; pop reg`, copies of constants kept in callee-saved registers, call
+   clobbers and PLT thunks, then reads the operator code and the registration at each call. It works per
+   ABI: SysV and Win64 on x86-64, AAPCS on ARM64 and ARM.
+2. **`__FILE__` strings.** Every `TF_LITE_ENSURE` in a kernel leaves `tensorflow/lite/kernels/conv.cc` in
+   `.rodata`; the functions that reference it belong to that kernel's source file.
+3. **Symbols**, when the build kept `tflite::ops::builtin::Register_CONV_2D()`.
+
+Each candidate `TfLiteRegistration` is validated (`invoke` must be code, `builtin_code` in range,
+`custom_name` a string or null) before anything is named. Names are only applied over IDA's dummy names,
+never over symbols or your own names. Functions shared by several operators (one `Prepare` for RELU, RELU6
+and TANH) are named after the shared source file and list every operator in their comment.
+
+## Building
+
+```
+git clone https://github.com/HexRaysSA/ida-sdk
+cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DIDASDK=path/to/ida-sdk
+cmake --build build
+ctest --test-dir build
+```
+
+Without `IDASDK`, only the core library, `tensorlens-scan` and the tests build. Windows: `tools\build.bat`.
+GitHub Actions builds Windows, Linux and macOS (universal) on every push and attaches the release zip to tags.
+
+## Limitations
+
+- Kernel recovery covers TFLite / LiteRT. ONNX Runtime is detected (and its execution providers listed), but
+  its kernels are not named yet.
+- Models that are encrypted, or downloaded at run time, cannot be found in the binary; the report still shows
+  the runtime and its delegates.
+- The graph view shows up to 3000 operators per subgraph.
+- Tested on x86_64 builds with IDA Free 9.5. The ARM64 and ARM paths use the same decoder with the AAPCS
+  argument registers but have not been run in IDA yet.
+
+## Credits
+
+- Author: Abraham Paul Jaison.
+- TFLite schema and C API types: TensorFlow (Apache-2.0). ONNX field numbers: onnx.proto (Apache-2.0).
+- [miniz](https://github.com/richgel999/miniz) (MIT) for zip and inflate.
+- Test fixtures from the TensorFlow and ONNX repositories (Apache-2.0).
+- Built with the help of an AI coding assistant (Claude, by Anthropic) for code, tests and documentation.
+  All results in this README were measured by running the plugin.
+
+MIT licence. See [LICENSE](LICENSE).

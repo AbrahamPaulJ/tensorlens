@@ -19,6 +19,7 @@ $suite = [ordered]@{
   whobird   = "$c\extracted\fdroid-org.woheller69.whobird_55\lib\x86_64\libtensorflowlite_jni.so"
   tflite214 = "$c\extracted\tflite-runtime-2.14-linux\tflite_runtime\_pywrap_tensorflow_interpreter_wrapper.so"
   seeneva   = "$c\extracted\fdroid-app.seeneva.reader_4\lib\x86_64\libseeneva.so"
+  lespas    = "$c\extracted\fdroid-site.leos.apps.lespas_120\lib\x86_64\libtensorflowlite_jni.so"
   dfn       = "$c\extracted\deepfilternet-0.5.6\libdeep_filter_ladspa-0.5.6-x86_64-unknown-linux-gnu.so"
 }
 foreach ($k in $suite.Keys) {
