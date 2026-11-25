@@ -28,12 +28,13 @@ if(MSVC)
   set(CMAKE_MSVC_RUNTIME_LIBRARY "MultiThreadedDLL")
 endif()
 
-add_library(tensorlens_core STATIC
-  core/model.cpp core/tflite.cpp core/onnx.cpp core/ncnn.cpp core/scan.cpp core/report.cpp)
-target_include_directories(tensorlens_core PUBLIC core)
-
 add_library(tl_miniz STATIC third_party/miniz/miniz.c)
 target_include_directories(tl_miniz PUBLIC third_party/miniz)
+
+add_library(tensorlens_core STATIC
+  core/model.cpp core/tflite.cpp core/onnx.cpp core/ncnn.cpp core/scan.cpp core/report.cpp core/inflate.cpp)
+target_include_directories(tensorlens_core PUBLIC core)
+target_link_libraries(tensorlens_core PUBLIC tl_miniz)
 
 add_executable(tensorlens-scan cli/main.cpp)
 target_link_libraries(tensorlens-scan PRIVATE tensorlens_core tl_miniz)

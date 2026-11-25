@@ -53,6 +53,7 @@ struct Model {
   std::vector<Graph> graphs;
   std::vector<std::string> warnings;
   bool detect_only = false;       // format recognised, graph not decoded
+  uint64_t attr_weight_bytes = 0; // weights held in node attributes (ONNX Constant nodes)
 
   uint64_t weight_bytes() const;
   size_t node_count() const;

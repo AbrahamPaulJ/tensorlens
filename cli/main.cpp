@@ -60,8 +60,12 @@ void extract(Ctx &c, const std::string &where, const tl::Hit &h, const uint8_t *
   char off[32];
   std::snprintf(off, sizeof off, "@%llx", (unsigned long long)h.offset);
   std::string path = c.extract_dir + "/" + name + off + ext_for(h.model.format);
+  if (h.compressed) {
+    std::snprintf(off, sizeof off, "@%llx+%llx", (unsigned long long)h.offset, (unsigned long long)h.inner_offset);
+    path = c.extract_dir + "/" + name + off + ext_for(h.model.format);
+  }
   std::ofstream o(path, std::ios::binary);
-  o.write(reinterpret_cast<const char *>(base + h.offset), static_cast<std::streamsize>(h.model.size));
+  o.write(reinterpret_cast<const char *>(h.bytes(base)), static_cast<std::streamsize>(h.model.size));
   if (o) c.extracted++;
 }
 
@@ -102,12 +106,16 @@ void scan_buffer(Ctx &c, const std::string &where, const std::vector<uint8_t> &b
     if (!c.quiet) {
       std::printf("%s @0x%llx  %s  (%s)\n", where.c_str(), (unsigned long long)h.offset, h.model.summary().c_str(),
                   h.model.size ? tl::format_bytes(h.model.size).c_str() : "size unknown");
+      if (h.compressed)
+        std::printf("    inside %s, at +0x%llx\n", h.container.c_str(), (unsigned long long)h.inner_offset);
       for (const std::string &op : h.model.custom_ops()) std::printf("    custom op: %s\n", op.c_str());
     }
     extract(c, where, h, buf.data());
     tl::ReportModel rm;
     rm.where = where;
     rm.offset = h.offset;
+    rm.container = h.container;
+    rm.inner_offset = h.inner_offset;
     rm.model = std::move(h.model);
     c.report.models.push_back(std::move(rm));
   }

@@ -19,7 +19,7 @@ const char *format_name(Format f) {
 }
 
 uint64_t Model::weight_bytes() const {
-  uint64_t n = 0;
+  uint64_t n = attr_weight_bytes;
   for (const Graph &g : graphs)
     for (const Tensor &t : g.tensors)
       if (t.constant) n += t.data_size;

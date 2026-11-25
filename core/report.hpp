@@ -12,6 +12,8 @@ struct ReportModel {
   std::string where;      // file, APK entry or IDA segment the model was found in
   uint64_t offset = 0;    // offset within `where` (or address in IDA)
   bool offset_is_ea = false;
+  std::string container;  // set when the model was found inside a compressed stream
+  uint64_t inner_offset = 0;
   Model model;
 };
 

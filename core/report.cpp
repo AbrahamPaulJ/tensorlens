@@ -80,6 +80,8 @@ std::string to_json(const Report &r, bool include_tensors) {
     const Model &m = rm.model;
     s += i ? ",\n    {" : "\n    {";
     s += "\"where\":" + q(rm.where) + ",\"" + (rm.offset_is_ea ? "address" : "offset") + "\":" + q(hex(rm.offset));
+    if (!rm.container.empty())
+      s += ",\"container\":" + q(rm.container) + ",\"inner_offset\":" + q(hex(rm.inner_offset));
     s += ",\"format\":" + q(format_name(m.format)) + ",\"size\":" + std::to_string(m.size);
     s += ",\"version\":" + q(m.version) + ",\"producer\":" + q(m.producer);
     s += ",\"ops\":" + std::to_string(m.node_count()) + ",\"weight_bytes\":" + std::to_string(m.weight_bytes());
@@ -161,6 +163,11 @@ std::string to_html(const Report &r) {
     auto kv = [&](const std::string &k, const std::string &v) {
       if (!v.empty()) s += "<div>" + html_escape(k) + "</div><div>" + html_escape(v) + "</div>";
     };
+    if (!rm.container.empty()) {
+      char io[32];
+      std::snprintf(io, sizeof io, "0x%llx", (unsigned long long)rm.inner_offset);
+      kv("Inside", rm.container + " at inflated offset " + io);
+    }
     kv("Size", m.size ? format_bytes(m.size) : "unknown");
     kv("Version", m.version);
     kv("Producer", m.producer);

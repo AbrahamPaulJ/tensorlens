@@ -181,8 +181,15 @@ Graph parse_graph(const Bytes &b, const Field &gf, std::vector<std::string> &war
             case 3: rn.n.name = str(b, nf); break;
             case 4: rn.n.op = str(b, nf); break;
             case 7: rn.n.domain = str(b, nf); break;
-            case 5:  // AttributeProto: note nested graphs (If/Loop/Scan bodies)
-              each(b, nf, [&](const Field &af) { if (af.num == 6 || af.num == 11) subgraphs = true; });
+            case 5:  // AttributeProto: nested graphs (If/Loop/Scan bodies) and tensor values
+              each(b, nf, [&](const Field &af) {
+                if (af.num == 6 || af.num == 11) subgraphs = true;
+                if (af.num == 5 && af.wire == LEN)  // t: TensorProto, e.g. a Constant node's value
+                  each(b, af, [&](const Field &tf) {
+                    if ((tf.num == 9 || (tf.num >= 4 && tf.num <= 7) || tf.num == 10 || tf.num == 11) && tf.wire == LEN)
+                      weights += tf.len;
+                  });
+              });
               break;
             default: break;
           }
@@ -292,7 +299,13 @@ ParseResult parse_onnx(const uint8_t *p, size_t avail) {
     if (ir < 1 || ir > 20) throw ParseError{"implausible ir_version"};
     if (!have_graph) throw ParseError{"no graph"};
     if (!printable_ascii(producer) || !printable_ascii(producer_ver)) throw ParseError{"binary producer name"};
-    m.graphs.push_back(parse_graph(b, graph, m.warnings, weights));
+    uint64_t init_weights = 0;
+    m.graphs.push_back(parse_graph(b, graph, m.warnings, init_weights));
+    // parse_graph counts initializer bytes (also recorded per tensor) and attribute tensors.
+    uint64_t tensor_bytes = 0;
+    for (const Tensor &t : m.graphs[0].tensors) if (t.constant) tensor_bytes += t.data_size;
+    m.attr_weight_bytes = init_weights > tensor_bytes ? init_weights - tensor_bytes : 0;
+    (void)weights;
     if (m.graphs[0].nodes.empty()) throw ParseError{"graph has no nodes"};
     for (const Node &n : m.graphs[0].nodes)
       if (!printable_ascii(n.op) || n.op.size() > 64) throw ParseError{"implausible op_type"};

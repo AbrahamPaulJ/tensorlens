@@ -174,6 +174,27 @@ static void test_fuzz() {
   CHECK(true);
 }
 
+// A .tar.gz of models embedded in a binary (as Rust include_bytes! or resource sections do).
+static void test_gzip_tar() {
+  std::mt19937 rng(99);
+  std::vector<uint8_t> blob(3000);
+  for (auto &b : blob) b = uint8_t(rng());
+  auto gz = load("models.tar.gz");
+  uint64_t at = blob.size();
+  blob.insert(blob.end(), gz.begin(), gz.end());
+  for (int i = 0; i < 3000; i++) blob.push_back(uint8_t(rng()));
+  auto hits = tl::scan(blob.data(), blob.size());
+  CHECK(hits.size() == 3);
+  int named = 0;
+  for (auto &h : hits) {
+    CHECK(h.compressed && h.offset == at && h.payload);
+    named += h.container.find("tar member models/") != std::string::npos;
+    // The model bytes reachable through the hit must re-parse on their own.
+    CHECK(tl::parse_any(h.bytes(blob.data()), h.model.size).ok);
+  }
+  CHECK(named == 3);
+}
+
 static void test_report() {
   auto b = load("tflite_custom_sinh.bin");
   tl::Report rep;
@@ -198,7 +219,7 @@ int main(int argc, char **argv) {
   struct T { const char *name; void (*fn)(); } tests[] = {
       {"tflite_fixtures", test_tflite_fixtures}, {"onnx_fixtures", test_onnx_fixtures}, {"ncnn", test_ncnn},
       {"embedding", test_embedding},             {"false_positives", test_false_positives},
-      {"fuzz", test_fuzz},                       {"report", test_report}};
+      {"fuzz", test_fuzz},                       {"gzip_tar", test_gzip_tar},                       {"report", test_report}};
   for (auto &t : tests) {
     auto t0 = std::chrono::steady_clock::now();
     t.fn();

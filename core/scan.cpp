@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cstring>
 
+#include "inflate.hpp"
+
 namespace tl {
 namespace {
 
@@ -98,10 +100,33 @@ std::vector<Hit> scan(const uint8_t *p, size_t n, const ScanOptions &opt) {
     } else if (opt.onnx && c == 0x08 && plausible_onnx_start(p + i, n - i)) {
       pr = parse_onnx(p + i, n - i);
       tried = true;
+    } else if (opt.gzip && c == 0x1f && p[i + 1] == 0x8b && p[i + 2] == 8) {
+      auto data = std::make_shared<std::vector<uint8_t>>();
+      size_t consumed = 0;
+      if (gunzip_at(p + i, n - i, *data, consumed)) {
+        ScanOptions inner = opt;
+        inner.gzip = false;  // one level is enough for real binaries and bounds the work
+        inner.progress = nullptr;
+        auto inner_hits = scan(data->data(), data->size(), inner);
+        std::shared_ptr<const std::vector<uint8_t>> shared = data;
+        for (Hit &ih : inner_hits) {
+          Hit h = std::move(ih);
+          h.compressed = true;
+          h.inner_offset = h.offset;
+          h.offset = i;
+          std::string member = tar_member_name(shared->data(), shared->size(), h.inner_offset);
+          h.container = "gzip stream (" + format_bytes(consumed) + " compressed, " + format_bytes(shared->size()) +
+                        " inflated)" + (member.empty() ? "" : ", tar member " + member);
+          h.payload = shared;
+          hits.push_back(std::move(h));
+        }
+        i += std::max<size_t>(consumed, 1);
+        continue;
+      }
     }
     if (tried && pr.ok) {
       // A hit must not start inside the previous hit (e.g. TFL3 inside an ONNX initializer).
-      if (!hits.empty() && start < hits.back().offset + hits.back().model.size) {
+      if (!hits.empty() && !hits.back().compressed && start < hits.back().offset + hits.back().model.size) {
         i++;
         continue;
       }
