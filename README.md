@@ -61,17 +61,24 @@ below comes from a run's `report.json`; nothing is hand-edited.
 | Binary | What it is | Kernels found | Resolver calls decoded | Functions named |
 |---|---|---|---|---|
 | `_pywrap_tensorflow_interpreter_wrapper.so` | tflite-runtime 2.14 (with symbols) | 222 | 157 + 147 (two resolvers) | 0 (keeps the symbol names) |
-| `libtensorflowlite_jni.so` | TFLite 2.16.1 AAR (stripped, kernel path strings) | 172 | 168 / 168 | 442 |
-| `libtensorflowlite_jni.so` | whobird (BirdNET) app, **no symbols, no strings** | 172 | 172 / 172 | 437 |
-| `libseeneva.so` | Seeneva comic reader: Rust app, TFLite statically linked | 126 | 122 / 122 | 308 |
-| `libdeep_filter_ladspa.so` | DeepFilterNet: 3 ONNX models in a gzip tar in `.rodata` | models: 3 | | |
+| `libtensorflowlite_jni.so` | TFLite 2.16.1 AAR (stripped, kernel path strings) | 172 | 168 / 168 | 455 |
+| `libtensorflowlite_jni.so` | whobird (BirdNET) app, **no symbols, no strings** | 172 | 172 / 172 | 450 |
+| `libseeneva.so` | Seeneva comic reader: Rust app, TFLite statically linked | 126 | 122 / 122 | 312 |
+| `libLiteRt.dll` | LiteRT 2.4 for Windows (PE, Win64 calling convention) | 215 | 172 + 172 (two resolvers) | 459 |
+
+| Binary | Models found |
+|---|---|
+| `libdeep_filter_ladspa.so` (DeepFilterNet, Rust) | 3 ONNX models (223, 141 and 119 ops) inside a 35 MB gzip tar in `.rodata`, with tar member names and the function that loads them |
+| Seeneva APK, added beside `libseeneva.so` | YOLO detector, 247 ops: every operator maps to a recovered kernel (CONV_2D runs 21 nodes, DEQUANTIZE 58, ...) |
+| Lespas APK, added beside its `libtensorflowlite_jni.so` | SSD detector, 64 ops, custom op `TFLite_Detection_PostProcess` flagged |
 
 **Accuracy check.** On the tflite-runtime build that keeps its `Register_*` symbols, the op resolver decoder
 (which never looks at symbols) agrees with the symbols on **203 of 203** registrations. The same decoder is
 what names the kernels in the stripped builds above.
 
-The scanner has no false positives on 128 MB of random and low-entropy data, and survives truncation and
-mutation fuzzing of every fixture (`tests/`).
+On binaries with no ML inside (`vcomp140.dll`, a voice-activity DLL) TensorLens reports no models, no resolver
+and no kernels. The scanner has no false positives on 128 MB of random and low-entropy data, and survives
+truncation and mutation fuzzing of every fixture (`tests/`).
 
 ## Install
 
@@ -173,7 +180,7 @@ GitHub Actions builds Windows, Linux and macOS (universal) on every push and att
 - Models that are encrypted, or downloaded at run time, cannot be found in the binary; the report still shows
   the runtime and its delegates.
 - The graph view shows up to 3000 operators per subgraph.
-- Tested on x86_64 builds with IDA Free 9.5. The ARM64 and ARM paths use the same decoder with the AAPCS
+- Tested on x86_64 builds (ELF and PE) with IDA Free 9.5. The ARM64 and ARM paths use the same decoder with the AAPCS
   argument registers but have not been run in IDA yet.
 
 ## Credits

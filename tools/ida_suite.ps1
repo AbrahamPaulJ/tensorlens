@@ -20,7 +20,13 @@ $suite = [ordered]@{
   tflite214 = "$c\extracted\tflite-runtime-2.14-linux\tflite_runtime\_pywrap_tensorflow_interpreter_wrapper.so"
   seeneva   = "$c\extracted\fdroid-app.seeneva.reader_4\lib\x86_64\libseeneva.so"
   lespas    = "$c\extracted\fdroid-site.leos.apps.lespas_120\lib\x86_64\libtensorflowlite_jni.so"
-  dfn       = "$c\extracted\deepfilternet-0.5.6\libdeep_filter_ladspa-0.5.6-x86_64-unknown-linux-gnu.so"
+  litertpy  = "$c\extracted\ai-edge-litert-2.4-win\ai_edge_litert\pywrap_litert_common.dll"
+  litertdll = "$c\extracted\ai-edge-litert-2.4-win\ai_edge_litert\libLiteRt.dll"
+  synthdll  = "$c\synthetic\out\tensorlens_embedded_x64.dll"
+  # controls: no TFLite inside, so no resolver and no kernels should be reported
+  vcomp     = "$c\extracted\realesrgan-ncnn-vulkan-20220424-win\vcomp140.dll"
+  tenvad    = "$c\extracted\ten-vad\ten_vad_win_x64.dll"
+  dfn       ="$c\extracted\deepfilternet-0.5.6\libdeep_filter_ladspa-0.5.6-x86_64-unknown-linux-gnu.so"
 }
 foreach ($k in $suite.Keys) {
   if ($Only.Count -and -not ($Only -contains $k)) { continue }

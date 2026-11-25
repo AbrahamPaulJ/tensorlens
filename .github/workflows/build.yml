@@ -70,8 +70,9 @@ jobs:
       - name: Package
         run: |
           set -e
-          mkdir -p pkg/tensorlens scan
+          mkdir -p pkg/tensorlens/docs
           cp ida-plugin.json README.md LICENSE pkg/tensorlens/
+          cp docs/logo.png pkg/tensorlens/docs/
           cp artifacts/*/tensorlens.dll artifacts/*/tensorlens.so artifacts/*/tensorlens.dylib pkg/tensorlens/
           (cd pkg/tensorlens && zip -r "$GITHUB_WORKSPACE/tensorlens-${GITHUB_REF_NAME}.zip" .)
           for os in Windows Linux macOS; do

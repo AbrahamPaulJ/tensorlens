@@ -32,7 +32,7 @@ Get-ChildItem $dir -Filter "$name.*" | Where-Object { $_.Extension -in '.id0','.
 if (-not $Reuse) { Remove-Item -ErrorAction SilentlyContinue $db }
 $open = if (Test-Path $db) { $db } else { $target }
 $sw = [Diagnostics.Stopwatch]::StartNew()
-$p = Start-Process -FilePath $ida -ArgumentList @("-Otensorlens:$json", "-L$log", "`"$open`"") -PassThru -WorkingDirectory $dir
+$p = Start-Process -FilePath $ida -ArgumentList @("-Otensorlens:$json", "-Opdb:off", "-L$log", "`"$open`"") -PassThru -WorkingDirectory $dir
 
 # Accept dialogs that block a fresh load. They are top-level windows of the IDA process.
 # Preferred button per dialog: start fresh rather than reuse half-written databases.
@@ -51,7 +51,11 @@ while (-not $p.HasExited -and (Get-Date) -lt $deadline) {
     if ($title -match '^IDA - ' -or $title -match '^IDA Free') { continue }  # the main window
     try {
       $buttons = @($w.FindAll([Windows.Automation.TreeScope]::Descendants, $btnCond))
-      foreach ($want in $prefer) {
+      $choices = $prefer
+      # PDB prompts: "Yes" opens a file browser that blocks forever, so decline them.
+      $allText = @($w.FindAll([Windows.Automation.TreeScope]::Descendants, [Windows.Automation.Condition]::TrueCondition) | ForEach-Object { $_.Current.Name }) -join ' '
+      if ($allText -match 'pdb|Symbol Server') { $choices = @('No', 'Cancel') }
+      foreach ($want in $choices) {
         $b = $buttons | Where-Object { $_.Current.Name -eq $want } | Select-Object -First 1
         if ($b) {
           $texts = @($w.FindAll([Windows.Automation.TreeScope]::Descendants,
