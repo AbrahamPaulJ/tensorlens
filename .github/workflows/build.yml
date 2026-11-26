@@ -25,8 +25,8 @@ jobs:
             cmake_extra: -DCMAKE_OSX_ARCHITECTURES=arm64;x86_64
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
           repository: HexRaysSA/ida-sdk
           ref: ${{ env.IDA_SDK_REF }}
@@ -34,7 +34,7 @@ jobs:
       - uses: ilammy/msvc-dev-cmd@v1
         if: runner.os == 'Windows'
       - name: Install Ninja
-        uses: seanmiddleditch/gha-setup-ninja@v5
+        uses: seanmiddleditch/gha-setup-ninja@v6
       - name: Configure
         shell: bash
         run: |
@@ -51,7 +51,7 @@ jobs:
           mkdir -p dist
           cp build/idabin/plugins/${{ matrix.lib }} dist/
           cp build/tensorlens-scan* dist/ 2>/dev/null || true
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: tensorlens-${{ runner.os }}
           path: dist/
@@ -63,7 +63,7 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
