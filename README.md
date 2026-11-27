@@ -40,6 +40,25 @@ op resolver. Kernels that run the loaded model are green and sorted first.
 
 ![A recovered kernel](docs/img/disasm.png)
 
+## Try it in two minutes
+
+Everything below uses a public, open-source app, so there is nothing to build and no sample to ask for.
+
+1. Install the plugin (see [Install](#install)).
+2. Download the Lespas photo app from F-Droid: [site.leos.apps.lespas_120.apk](https://f-droid.org/repo/site.leos.apps.lespas_120.apk)
+   (or the current version from its [F-Droid page](https://f-droid.org/packages/site.leos.apps.lespas/)). An APK
+   is a zip: extract `lib/x86_64/libtensorflowlite_jni.so` from it.
+3. Open that `.so` in IDA and press **`Ctrl+Alt+M`**. TensorLens waits for auto-analysis, then fills the
+   **TFLite kernels** window: 172 operators, 452 functions named, no symbols needed.
+4. **File > Load file > TensorLens: add models from a file, APK or AAR** and pick the APK itself. The
+   **models** window now lists the app's object detector (64 operators, one custom op). Press `Enter` on it to
+   open its graph, then double-click any operator to land in the kernel that runs it.
+
+No app at hand? The official TFLite runtime works too:
+[tensorflow-lite-2.16.1.aar](https://repo1.maven.org/maven2/org/tensorflow/tensorflow-lite/2.16.1/tensorflow-lite-2.16.1.aar)
+from Maven Central is a zip; open its `jni/x86_64/libtensorflowlite_jni.so` (172 kernels recovered, 455 functions
+named).
+
 ## Why it matters
 
 - **Security review of AI features.** Which models does this app ship, what can they see, and which native

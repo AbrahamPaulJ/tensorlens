@@ -163,6 +163,14 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
   }
 
   void analyse(bool show) {
+    // Kernel recovery reads functions and cross-references, so run it on a finished database: pressing the
+    // hotkey right after opening a file would otherwise give a partial result.
+    if (!auto_is_ok() && !st.scanned) {
+      msg("TensorLens: waiting for IDA's auto-analysis to finish...\n");
+      show_wait_box("TensorLens: waiting for IDA's auto-analysis to finish");
+      auto_wait();
+      hide_wait_box();
+    }
     if (!st.scanned) {
       scan_database(st, true);
       annotate_models(st);
