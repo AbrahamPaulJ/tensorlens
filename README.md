@@ -31,8 +31,8 @@ custom op (native code outside the stock runtime) is red.
 
 ![Model graph in IDA](docs/img/graph.png)
 
-**The kernels**, recovered from the same stripped library (no symbols, no kernel path strings) by decoding its
-op resolver. Kernels that run the loaded model are green and sorted first.
+**The kernels**, recovered from the same stripped library by decoding its op resolver, which needs neither
+symbols nor strings. Kernels that run the loaded model are green and sorted first.
 
 ![TFLite kernels](docs/img/kernels.png)
 
@@ -49,10 +49,12 @@ Everything below uses a public, open-source app, so there is nothing to build an
    (or the current version from its [F-Droid page](https://f-droid.org/packages/site.leos.apps.lespas/)). An APK
    is a zip: extract `lib/x86_64/libtensorflowlite_jni.so` from it.
 3. Open that `.so` in IDA and press **`Ctrl+Alt+M`**. TensorLens waits for auto-analysis, then fills the
-   **TFLite kernels** window: 172 operators, 452 functions named, no symbols needed.
+   **TFLite kernels** window: 177 kernels (172 from the op resolver, 5 of TFLite's bundled custom ops), 472
+   functions named, no symbols needed.
 4. **File > Load file > TensorLens: add models from a file, APK or AAR** and pick the APK itself. The
    **models** window now lists the app's object detector (64 operators, one custom op). Press `Enter` on it to
-   open its graph, then double-click any operator to land in the kernel that runs it.
+   open its graph, then double-click any operator to land in the kernel that runs it. Every operator links to
+   code, including the custom op.
 
 No app at hand? The official TFLite runtime works too:
 [tensorflow-lite-2.16.1.aar](https://repo1.maven.org/maven2/org/tensorflow/tensorflow-lite/2.16.1/tensorflow-lite-2.16.1.aar)
@@ -74,28 +76,44 @@ named).
 
 ## Results on real binaries
 
-Measured with the headless runner (`tools/ida_suite.ps1`) on IDA Free 9.5, x86_64 builds. Every number
-below comes from a run's `report.json`; nothing is hand-edited.
+Measured with the headless runner (`tools/ida_suite.ps1`) on IDA Free 9.5, x86_64 builds, across four runtime
+releases (TFLite 2.14, 2.16.1, LiteRT 2.4 and the versions the apps bundle). Every number below comes from a
+run's `report.json`; nothing is hand-edited.
 
-| Binary | What it is | Kernels found | Resolver calls decoded | Functions named |
-|---|---|---|---|---|
-| `_pywrap_tensorflow_interpreter_wrapper.so` | tflite-runtime 2.14 (with symbols) | 222 | 157 + 147 (two resolvers) | 0 (keeps the symbol names) |
-| `libtensorflowlite_jni.so` | TFLite 2.16.1 AAR (stripped, kernel path strings) | 172 | 168 / 168 | 455 |
-| `libtensorflowlite_jni.so` | whobird (BirdNET) app, **no symbols, no strings** | 172 | 172 / 172 | 450 |
-| `libseeneva.so` | Seeneva comic reader: Rust app, TFLite statically linked | 126 | 122 / 122 | 312 |
-| `libLiteRt.dll` | LiteRT 2.4 for Windows (PE, Win64 calling convention) | 215 | 172 + 172 (two resolvers) | 459 |
+| Sample | Binary | What it is | Kernels found | Resolver calls decoded | Functions named |
+|---|---|---|---|---|---|
+| `tflite-runtime-2.14` | `_pywrap_tensorflow_interpreter_wrapper.so` | tflite-runtime 2.14 (with symbols) | 222 | 157 + 147 (two resolvers) | 0 (keeps the symbol names) |
+| `tflite-2.16.1-aar` | `libtensorflowlite_jni.so` | TFLite 2.16.1 AAR (stripped, kernel path strings) | 172 | 168 / 168 | 455 |
+| `whobird` | `libtensorflowlite_jni.so` | whobird (BirdNET) app, **no symbols** | 176 | 172 / 172 | 466 |
+| `lespas` | `libtensorflowlite_jni.so` | Lespas photo app, no symbols | 177 | 172 / 172 | 472 |
+| `seeneva` | `libseeneva.so` | Seeneva comic reader: Rust app, TFLite statically linked | 126 | 122 / 122 | 312 |
+| `litert-2.4-win` | `libLiteRt.dll` | LiteRT 2.4 for Windows (PE, Win64 calling convention) | 220 | 172 + 172 (two resolvers) | 476 |
 
-| Binary | Models found |
-|---|---|
-| `libdeep_filter_ladspa.so` (DeepFilterNet, Rust) | 3 ONNX models (223, 141 and 119 ops) inside a 35 MB gzip tar in `.rodata`, with tar member names and the function that loads them |
-| Seeneva APK, added beside `libseeneva.so` | YOLO detector, 247 ops: every operator maps to a recovered kernel (CONV_2D runs 21 nodes, DEQUANTIZE 58, ...) |
-| Lespas APK, added beside its `libtensorflowlite_jni.so` | SSD detector, 64 ops, custom op `TFLite_Detection_PostProcess` flagged |
+| Sample | Binary | Models found |
+|---|---|---|
+| `deepfilternet` | `libdeep_filter_ladspa.so` (DeepFilterNet, Rust) | 3 ONNX models (223, 141 and 119 ops) inside a 35 MB gzip tar in `.rodata`, with tar member names and the function that loads them |
+| `seeneva` | the APK, added beside `libseeneva.so` | YOLO detector, 247 ops: every operator maps to a recovered kernel (CONV_2D runs 21 nodes, DEQUANTIZE 58, ...) |
+| `lespas` | the APK, added beside its `libtensorflowlite_jni.so` | SSD detector, 64 ops: every operator maps to a kernel, including the custom op `TFLite_Detection_PostProcess` |
+
+**Reproduce every row.** All samples are public (F-Droid, Maven Central, PyPI, GitHub releases). One command
+downloads them, checks each SHA-256, extracts the library to open and writes what you should see:
+
+```
+python tools/fetch_samples.py samples/            # all nine, about 210 MB
+python tools/fetch_samples.py samples/ lespas     # or just one
+```
+
+Sources, hashes and licences are in [`tools/samples.json`](tools/samples.json).
+
+Kernels beyond the resolver's count are TFLite's bundled custom ops (`TFLite_Detection_PostProcess`, `Mfcc`,
+`AudioSpectrogram`, ...), found through their registration tables. Delegates are listed too: the GPU delegate
+library shipped in the same Lespas APK (`libtensorflowlite_gpu_jni.so`) is reported as `gpu`.
 
 **Accuracy check.** On the tflite-runtime build that keeps its `Register_*` symbols, the op resolver decoder
 (which never looks at symbols) agrees with the symbols on **203 of 203** registrations. The same decoder is
 what names the kernels in the stripped builds above.
 
-On binaries with no ML inside (`vcomp140.dll`, a voice-activity DLL) TensorLens reports no models, no resolver
+On binaries with no ML inside (samples `control-vcomp140` and `control-ten-vad`) TensorLens reports no models, no resolver
 and no kernels. The scanner has no false positives on 128 MB of random and low-entropy data, and survives
 truncation and mutation fuzzing of every fixture (`tests/`).
 

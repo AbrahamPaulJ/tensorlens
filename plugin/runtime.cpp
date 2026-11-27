@@ -234,6 +234,20 @@ void from_symbols(Ctx &c) {
 }
 
 // --- 2. __FILE__ strings -------------------------------------------------------------------
+// TFLite source paths: "tensorflow/lite/<sub>" in TensorFlow builds, "tflite/<sub>" since the runtime moved to
+// the LiteRT repository (2024 on). Returns the offset just past the prefix, or npos.
+size_t find_tflite_path(const std::string &str, const char *sub) {
+  for (const char *root : {"tensorflow/lite/", "tflite/"}) {
+    std::string pat = std::string(root) + sub;
+    for (size_t p = str.find(pat); p != std::string::npos; p = str.find(pat, p + 1)) {
+      // "tflite/" must start a path component, not end a longer name ("my_tflite/kernels").
+      if (p > 0 && (isalnum(uchar(str[p - 1])) || str[p - 1] == '_' || str[p - 1] == '-')) continue;
+      return p + pat.size();
+    }
+  }
+  return std::string::npos;
+}
+
 void from_strings(Ctx &c) {
   build_strlist();
   size_t n = get_strlist_qty();
@@ -246,14 +260,17 @@ void from_strings(Ctx &c) {
     std::replace(str.begin(), str.end(), '\\', '/');
     std::string file, kind;
     size_t p;
-    if ((p = str.find("tensorflow/lite/kernels/")) != std::string::npos) {
+    if ((p = find_tflite_path(str, "kernels/")) != std::string::npos) {
       c.st.runtime.tflite = true;
-      file = str.substr(p + 24);
+      file = str.substr(p);
       kind = "tflite";
-    } else if ((p = str.find("tensorflow/lite/delegates/")) != std::string::npos) {
+    } else if ((p = find_tflite_path(str, "delegates/")) != std::string::npos) {
       c.st.runtime.tflite = true;
-      std::string d = str.substr(p + 26);
-      c.st.runtime.delegates.insert(d.substr(0, d.find('/')));
+      std::string d = str.substr(p);
+      d = d.substr(0, d.find('/'));
+      // Shared helpers under delegates/ are not delegates.
+      if (d.find('.') == std::string::npos && d != "utils" && d != "serialization" && d != "telemetry")
+        c.st.runtime.delegates.insert(d);
       continue;
     } else if ((p = str.find("onnxruntime/core/providers/")) != std::string::npos) {
       c.st.runtime.onnxruntime = true;
@@ -262,7 +279,8 @@ void from_strings(Ctx &c) {
       if (prov != "cpu") c.st.runtime.delegates.insert("onnxruntime:" + prov);
       file = "onnxruntime/" + str.substr(p + 27);
       kind = "ort";
-    } else if (str.find("tensorflow/lite/") != std::string::npos || str.find("TfLite") != std::string::npos) {
+    } else if (str.find("tensorflow/lite/") != std::string::npos || find_tflite_path(str, "") != std::string::npos ||
+               str.find("TfLite") != std::string::npos) {
       c.st.runtime.tflite = true;
       continue;
     } else if (str.find("ncnn") != std::string::npos && str.find("layer") != std::string::npos) {
@@ -675,8 +693,25 @@ void recover_runtime(State &st) {
   replace_wait_box("TensorLens: decoding the op resolver");
   from_resolver(c);
 
+  // Custom ops that ship inside TFLite, by source file, under the name a model uses for them (the op's
+  // custom_code). Each name was checked against the strings in TFLite 2.14, 2.16 and LiteRT 2.4 builds.
+  static const std::map<std::string, std::string> custom_files = {
+      {"detection_postprocess.cc", "TFLite_Detection_PostProcess"},
+      {"audio_spectrogram.cc", "AudioSpectrogram"},
+      {"mfcc.cc", "Mfcc"},
+      {"numeric_verify.cc", "NumericVerify"},
+      {"hadamard_rotation.cc", "aeq.hadamard_rotation"},
+  };
   for (auto &[t, k] : c.tables) {
     k.source_file = file_of(c, k);
+    if (k.op.empty() && !k.source_file.empty()) {
+      auto cf = custom_files.find(k.source_file);
+      if (cf != custom_files.end()) {
+        k.op = cf->second;
+        k.custom = true;
+        k.evidence = "source file " + k.source_file + " implements custom op " + k.op;
+      }
+    }
     if (k.op.empty() && !k.source_file.empty()) {
       const char *ops = tflite_kernel_file_ops(k.source_file);
       if (ops && !strchr(ops, ' ')) {  // the file implements exactly one op

@@ -20,7 +20,8 @@ $suite = [ordered]@{
   tflite214 = "$c\extracted\tflite-runtime-2.14-linux\tflite_runtime\_pywrap_tensorflow_interpreter_wrapper.so"
   seeneva   = "$c\extracted\fdroid-app.seeneva.reader_4\lib\x86_64\libseeneva.so"
   lespas    = "$c\extracted\fdroid-site.leos.apps.lespas_120\lib\x86_64\libtensorflowlite_jni.so"
-  litertpy  = "$c\extracted\ai-edge-litert-2.4-win\ai_edge_litert\pywrap_litert_common.dll"
+  lespasgpu = "$c\extracted\fdroid-site.leos.apps.lespas_120\lib\x86_64\libtensorflowlite_gpu_jni.so"
+  litertpy  ="$c\extracted\ai-edge-litert-2.4-win\ai_edge_litert\pywrap_litert_common.dll"
   litertdll = "$c\extracted\ai-edge-litert-2.4-win\ai_edge_litert\libLiteRt.dll"
   synthdll  = "$c\synthetic\out\tensorlens_embedded_x64.dll"
   # controls: no TFLite inside, so no resolver and no kernels should be reported

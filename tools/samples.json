@@ -1,0 +1,112 @@
+{
+ "samples": [
+  {
+   "name": "tflite-runtime-2.14",
+   "what": "tflite-runtime 2.14 for Linux (keeps Register_* symbols: the accuracy check)",
+   "url": "https://files.pythonhosted.org/packages/8f/a6/02d68cb62cd221589a0ff055073251d883936237c9c990e34a1d7cecd06f/tflite_runtime-2.14.0-cp311-cp311-manylinux2014_x86_64.whl",
+   "sha256": "195ab752e7e57329a68e54dd3dd5439fad888b9bff1be0f0dc042a3237a90e4d",
+   "size": 2414486,
+   "licence": "Apache-2.0",
+   "file": "tflite_runtime-2.14.0-cp311-cp311-manylinux2014_x86_64.whl",
+   "open": "tflite_runtime/_pywrap_tensorflow_interpreter_wrapper.so",
+   "add_models": false,
+   "expect": "222 kernels; 2 op resolvers, 157 + 147 calls decoded; 203/203 agree with the symbols"
+  },
+  {
+   "name": "tflite-2.16.1-aar",
+   "what": "official TFLite 2.16.1 Android library (stripped)",
+   "url": "https://repo1.maven.org/maven2/org/tensorflow/tensorflow-lite/2.16.1/tensorflow-lite-2.16.1.aar",
+   "sha256": "34b065817e294e7dd3569504e8b9454938ceae453b6a459da54d5f6e45d3c94e",
+   "size": 6230530,
+   "licence": "Apache-2.0",
+   "file": "tensorflow-lite-2.16.1.aar",
+   "open": "jni/x86_64/libtensorflowlite_jni.so",
+   "add_models": false,
+   "expect": "172 kernels; resolver 168/168 decoded; 455 functions named; delegates nnapi, xnnpack"
+  },
+  {
+   "name": "whobird",
+   "what": "whobird (BirdNET) app: no symbols",
+   "url": "https://f-droid.org/repo/org.woheller69.whobird_55.apk",
+   "sha256": "b9f747b29569a647410659c17b99c53d6c3553e78909f4a526274116df8dbc19",
+   "size": 22007218,
+   "licence": "GPL-3.0-only",
+   "file": "org.woheller69.whobird_55.apk",
+   "open": "lib/x86_64/libtensorflowlite_jni.so",
+   "add_models": false,
+   "expect": "176 kernels (172 from the resolver, 172/172 decoded, plus TFLite's bundled custom ops); 466 functions named; delegates nnapi, xnnpack"
+  },
+  {
+   "name": "lespas",
+   "what": "Lespas photo app: object detector with a custom op",
+   "url": "https://f-droid.org/repo/site.leos.apps.lespas_120.apk",
+   "sha256": "c674d7a203d5add76cb0531b44610aee78767ef889d21d34939936fb0d255f09",
+   "size": 50377846,
+   "licence": "Apache-2.0",
+   "file": "site.leos.apps.lespas_120.apk",
+   "open": "lib/x86_64/libtensorflowlite_jni.so",
+   "add_models": true,
+   "expect": "177 kernels (resolver 172/172 decoded); 472 functions named; delegates nnapi, xnnpack. Add the APK: 1 TFLite model, 64 ops, every op mapped to a kernel including the custom op TFLite_Detection_PostProcess"
+  },
+  {
+   "name": "seeneva",
+   "what": "Seeneva comic reader: Rust app with TFLite linked in",
+   "url": "https://f-droid.org/repo/app.seeneva.reader_4.apk",
+   "sha256": "5fde146d4233fa5f1fd09c1e810a5dbd7792ed599adb691d78c6259d84bdd52e",
+   "size": 27173043,
+   "licence": "GPL-3.0-or-later",
+   "file": "app.seeneva.reader_4.apk",
+   "open": "lib/x86_64/libseeneva.so",
+   "add_models": true,
+   "expect": "126 kernels; resolver 122/122; 312 functions named. Add the APK: YOLO model, 247 ops, every op mapped to a kernel"
+  },
+  {
+   "name": "litert-2.4-win",
+   "what": "LiteRT 2.4 for Windows (PE, Win64 calling convention)",
+   "url": "https://files.pythonhosted.org/packages/21/af/ab40ebb05dfff95e76988232121bbfb5ee53e76e97ac0bf1f21050df49e7/ai_edge_litert-2.4.0-cp311-cp311-win_amd64.whl",
+   "sha256": "0f6dced01f9affb32d19197773f5aafb8b04d8619239c69cde92989cd2a84ec2",
+   "size": 18582224,
+   "licence": "Apache-2.0",
+   "file": "ai_edge_litert-2.4.0-cp311-cp311-win_amd64.whl",
+   "open": "ai_edge_litert/libLiteRt.dll",
+   "add_models": false,
+   "expect": "220 kernels; 2 op resolvers, 172 + 172 decoded; 476 functions named; delegate xnnpack"
+  },
+  {
+   "name": "deepfilternet",
+   "what": "DeepFilterNet: 3 ONNX models in a gzip tar in .rodata",
+   "url": "https://github.com/Rikorose/DeepFilterNet/releases/download/v0.5.6/libdeep_filter_ladspa-0.5.6-x86_64-unknown-linux-gnu.so",
+   "sha256": "2ca3205c2911d389604a826a240e745597d50252b5cab81c8248252b335e2236",
+   "size": 52711472,
+   "licence": "MIT OR Apache-2.0",
+   "file": "libdeep_filter_ladspa-0.5.6-x86_64-unknown-linux-gnu.so",
+   "open": null,
+   "add_models": false,
+   "expect": "3 ONNX models (223, 141 and 119 ops) inside a gzip tar in .rodata"
+  },
+  {
+   "name": "control-vcomp140",
+   "what": "control: OpenMP runtime, no ML inside",
+   "url": "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5.0/realesrgan-ncnn-vulkan-20220424-windows.zip",
+   "sha256": "abc02804e17982a3be33675e4d471e91ea374e65b70167abc09e31acb412802d",
+   "size": 45474481,
+   "licence": "BSD-3-Clause",
+   "file": "realesrgan-ncnn-vulkan-20220424-windows.zip",
+   "open": "vcomp140.dll",
+   "add_models": false,
+   "expect": "0 models, 0 kernels"
+  },
+  {
+   "name": "control-ten-vad",
+   "what": "control: voice-activity DLL, no TFLite inside",
+   "url": "https://raw.githubusercontent.com/TEN-framework/ten-vad/main/lib/Windows/x64/ten_vad.dll",
+   "sha256": "38937f5604fa93a7941db7b9326992b792fa3731ebf9353973b3234457c6064b",
+   "size": 510464,
+   "licence": "Apache-2.0 + Agora additional conditions (non-compete)",
+   "file": "ten_vad_win_x64.dll",
+   "open": null,
+   "add_models": false,
+   "expect": "0 models, 0 kernels"
+  }
+ ]
+}

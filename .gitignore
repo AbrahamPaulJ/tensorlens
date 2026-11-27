@@ -7,3 +7,4 @@ build/
 *.til
 /out/
 C*Users*/
+/samples/

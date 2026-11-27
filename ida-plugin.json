@@ -3,7 +3,7 @@
   "plugin": {
     "name": "tensorlens",
     "entryPoint": "tensorlens",
-    "version": "0.1.0",
+    "version": "0.1.1",
     "idaVersions": ">=9.5",
     "platforms": ["windows-x86_64", "linux-x86_64", "macos-x86_64", "macos-aarch64"],
     "description": "Finds TFLite, ONNX, ncnn and ExecuTorch models embedded in binaries (also inside gzip and tar), shows their graphs in IDA, and recovers the TFLite runtime that runs them: names and types every kernel's Init/Prepare/Eval and links each graph node to its code.",
