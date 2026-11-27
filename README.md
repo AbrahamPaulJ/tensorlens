@@ -117,6 +117,43 @@ On binaries with no ML inside (samples `control-vcomp140` and `control-ten-vad`)
 and no kernels. The scanner has no false positives on 128 MB of random and low-entropy data, and survives
 truncation and mutation fuzzing of every fixture (`tests/`).
 
+## In the wild: every app on F-Droid
+
+To see what TensorLens finds outside a test corpus, `tools/fdroid_survey.py` ran the scanner over the latest
+version of every app in the F-Droid repository (Nov 27 to 28, 2026). It reads each APK's zip directory with HTTP
+range requests and fetches only the entries that could hold a model: 6.0 GB downloaded for 88 GB of APKs.
+
+| | |
+|---|---|
+| Apps surveyed | 5,012 (45 more could not be read) |
+| Apps shipping an ML runtime library | 111: ONNX Runtime 51, TFLite / LiteRT / MediaPipe 27, ggml 24, OpenCV DNN 14, ncnn 2, PyTorch 2 |
+| Apps with a model TensorLens reads | 49, with 89 models: ONNX 42, TFLite 41, ncnn 6 |
+| Apps whose models use custom ops | 12, with 17 distinct custom ops |
+
+What it turned up:
+
+- **Five chat apps ship the same background-blur model.** Element, SchildiChat, Mages, Nextcloud Talk and TRIfA
+  all carry a 246-operator selfie-segmentation model for video calls. It needs `Convolution2DTransposeBias`, a
+  MediaPipe custom op that stock TFLite does not have, so whatever runs the model has to bring its own kernel.
+- **ONNX Runtime contrib ops** (`com.microsoft::QAttention`, `SkipLayerNormalization`, `FusedMatMul`,
+  `DynamicQuantizeLSTM`, ...) in four apps' quantised transformer and speech models.
+- **TensorFlow Text ops** (`TFSentencepieceTokenizeOp`, `RaggedTensorToTensor`) in a 581-operator sentence encoder
+  (Knotwork), and the TFLite `TFLite_Detection_PostProcess` op in Lespas, the app the walkthrough above uses.
+- **75 apps ship a runtime but no model file the scanner reads**: the model is downloaded at run time, or stored in
+  a format TensorLens does not parse yet, such as the GGUF files that ggml runtimes load (24 of the 75).
+
+Every app with a runtime or a model is listed, with the models' paths, operator counts and custom ops, in
+[`docs/survey/fdroid-2026-11-28.jsonl`](docs/survey/fdroid-2026-11-28.jsonl). To rerun it:
+
+```
+python tools/fdroid_survey.py --scan build/tensorlens-scan --out survey/      # several hours, resumable
+python tools/fdroid_survey.py --summary survey/
+```
+
+Limits of the survey: runtimes are recognised by their library file names, and models are looked for in the
+APK's files (assets, raw resources), not inside native libraries. Entries larger than 200 MB are skipped
+(400 MB for the first 1,474 apps of the run).
+
 ## Install
 
 **With hcli** (IDA 9.5 or later):
