@@ -4,6 +4,23 @@
 
 **ML models and the runtimes that run them, inside the binary, in IDA.**
 
+**Evidence at a glance** (every figure is from a run you can repeat; see [Results](#results-on-real-binaries)):
+
+- **Accuracy against ground truth:** on a TFLite build that keeps its symbols, the op resolver decoder (which
+  never reads symbols) agrees with them on **203 of 203** kernel registrations, with 0 disagreements.
+- **A real stripped app, end to end:** the Lespas photo app (open source, on F-Droid) ships a stripped
+  `libtensorflowlite_jni.so` and an object detector. TensorLens recovers **177 kernels** and names **472
+  functions** with no symbols, reads the **64-operator** model from the APK, and links **every operator** to the
+  kernel that runs it, including a custom op. [Try it in two minutes](#try-it-in-two-minutes).
+- **Reproducible:** 9 public samples (F-Droid, Maven Central, PyPI, GitHub), each pinned by SHA-256, download
+  with one command, `python tools/fetch_samples.py samples/`, which also writes the results to expect.
+  Two control binaries with no ML in them give 0 models and 0 kernels.
+- **In the wild:** run over **all 5,012 F-Droid apps**, it read **89 models in 49 apps** and found 12 apps whose
+  models use custom ops. [Survey](#in-the-wild-every-app-on-f-droid).
+- **Nothing to build:** `hcli plugin install tensorlens` installs prebuilt binaries for Windows, Linux and macOS
+  (built by CI on every release). Native C++, so it also runs in **IDA Free**, where every figure above was
+  measured. 56 core tests.
+
 On-device machine learning is now in ordinary apps: face and object detection, keyboards, voice,
 document scanners. A reverse engineer who opens one of these libraries meets two things IDA knows
 nothing about:
