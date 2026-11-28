@@ -223,6 +223,9 @@ struct plugin_ctx_t : public plugmod_t, public event_listener_t {
       return;
     }
     if (st.recovered) annotate_kernels(st);
+    // Open lists re-sort and re-colour: kernels the new models use move to the top.
+    refresh_chooser("TensorLens: TFLite kernels");
+    refresh_chooser("TensorLens: models");
   }
 
   void run_headless() {
