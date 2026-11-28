@@ -91,6 +91,25 @@ named).
 - **Vulnerability research.** TFLite kernels parse attacker-supplied tensors when a model or its input is
   untrusted. Typed, named kernels make that code readable.
 
+## Prior art, and what is new
+
+Finding models in apps is not new. Xu et al. ([A First Look at Deep Learning Apps on Smartphones](https://arxiv.org/abs/1812.05448),
+WWW 2019) found 211 deep learning apps among 16,500 Android apps; Sun et al. ([Mind Your Weight(s)](https://www.usenix.org/conference/usenixsecurity21/presentation/sun-zhichuang),
+USENIX Security 2021) found 1,468 ML apps among 46,753 and showed that 41% do not protect their models at all;
+Huang and Chen ([Smart App Attack](https://arxiv.org/abs/2204.11075), IEEE TIFS 2022) attacked models taken from
+Google Play apps. [Netron](https://github.com/lutzroeder/netron) displays a model once you have it as a file.
+
+All of these work on the model alone, outside the disassembler. What TensorLens adds:
+
+- **The runtime side.** It recovers the TFLite kernels in a *stripped* native library by decoding the op
+  resolver's registration calls, names and types them, and checks that decoding against ground truth (203/203).
+  We know of no other tool, for IDA or otherwise, that does this.
+- **The link.** Model graph nodes and kernel code are connected both ways inside IDA: a node jumps to the code
+  that runs it, and each kernel lists the nodes it serves. That is what a reverse engineer needs to review a custom
+  op or a patched kernel.
+- **Models inside native code.** It also finds models embedded in a library's `.rodata` or in gzip/tar blobs
+  inside it (DeepFilterNet), and shows the code that loads them.
+
 ## Results on real binaries
 
 Measured with the headless runner (`tools/ida_suite.ps1`) on IDA Free 9.5, x86_64 builds, across four runtime
